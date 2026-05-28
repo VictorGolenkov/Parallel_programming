@@ -1,25 +1,29 @@
 cmake_minimum_required(VERSION 3.20)
-project(lab1 CXX)
+project(lab3 CXX)
 set(CMAKE_CXX_STANDARD 20)
+
+find_package(MPI REQUIRED)
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" OR
    CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR
    CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-  add_compile_options("-Wall" "-Wconversion" "-Wextra" "-Wpedantic" "-Weffc++")
+  add_compile_options("-Wall" "-Wconversion" "-Wextra" "-Wpedantic")
 endif()
 
-if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-  if(CMAKE_CXX_FLAGS MATCHES "/W[0-4]")
-    string(REGEX REPLACE "/W[0-4]" "/W4" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
-  else()
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
-  endif()
-endif()
+add_executable(generator src/generator.cpp)
+target_include_directories(generator PRIVATE include)
+target_compile_definitions(generator PRIVATE PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
 
-file(GLOB sources ${PROJECT_SOURCE_DIR}/src/*.cpp)
-file(GLOB headers ${PROJECT_SOURCE_DIR}/include/*.hpp)
-add_executable(${PROJECT_NAME} ${sources} ${headers})
-target_include_directories(${PROJECT_NAME} PRIVATE include)
+add_executable(lab3 src/main.cpp include/matrix.hpp)
+target_include_directories(lab3 PRIVATE include ${MPI_CXX_INCLUDE_PATH})
+target_link_libraries(lab3 ${MPI_CXX_LIBRARIES})
+target_compile_definitions(lab3 PRIVATE PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
 
-target_compile_definitions(${PROJECT_NAME} PRIVATE PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
+file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/input")
 file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/output")
+
+if(WIN32)
+    set(MPI_CXX_INCLUDE_PATH "C:/Program Files (x86)/Microsoft SDKs/MPI/Include")
+    set(MPI_CXX_LIBRARIES "C:/Program Files (x86)/Microsoft SDKs/MPI/Lib/x64/msmpi.lib")
+endif()
+
