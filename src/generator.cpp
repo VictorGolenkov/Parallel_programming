@@ -1,3 +1,4 @@
+#include <stdexcept>
 #include <fstream>
 #include <random>
 #include <string>

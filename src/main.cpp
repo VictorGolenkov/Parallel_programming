@@ -1,7 +1,8 @@
+#include <mpi.h>
 #include <chrono>
 #include <cstdlib>
 #include <random>
-#include <mpi.h>
+#include <stdexcept>
 
 #include "matrix.hpp"
 

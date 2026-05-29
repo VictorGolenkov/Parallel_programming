@@ -88,10 +88,9 @@ Matrix<T> multiply_mpi(const Matrix<T>& A, const Matrix<T>& B)
     }
 
     std::vector<T> local_A(local_rows * n);
-    MPI_Scatterv(A.data(), sendcounts.data(), displs.data(), MPI_DOUBLE,
-        local_A.data(), local_rows * n, MPI_DOUBLE,
-        0, MPI_COMM_WORLD);
-
+    MPI_Scatterv(const_cast<T*>(A.data()), sendcounts.data(), displs.data(), MPI_DOUBLE,
+             local_A.data(), (int)(local_rows * n), MPI_DOUBLE,
+             0, MPI_COMM_WORLD);
     MPI_Bcast(const_cast<T*>(B.data()), n * n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
     std::vector<T> local_C(local_rows * n, 0.0);
