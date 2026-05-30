@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <omp.h>
 
 template <typename T>
 class Matrix
@@ -16,8 +17,8 @@ private:
 
 public:
     explicit Matrix(size_t n) : Matrix(n, n) {}
-    Matrix(size_t rows, size_t cols) : _rows(rows), _cols(cols), _data(rows * cols) {}
-    explicit Matrix(const std::string &filename) : _rows(0), _cols(0)
+    Matrix(size_t rows, size_t cols) : _rows(rows), _cols(cols), _data(rows* cols) {}
+    explicit Matrix(const std::string& filename) : _rows(0), _cols(0)
     {
         std::ifstream file(filename);
         if (!file.is_open())
@@ -43,37 +44,34 @@ public:
         }
     }
 
-    T &operator()(size_t row, size_t col)
+    T& operator()(size_t row, size_t col)
     {
         if (row >= _rows || col >= _cols)
             throw std::out_of_range("Matrix index out of range");
         return _data[row * _cols + col];
     }
-    const T &operator()(size_t row, size_t col) const
+    const T& operator()(size_t row, size_t col) const
     {
         if (row >= _rows || col >= _cols)
             throw std::out_of_range("Matrix index out of range");
         return _data[row * _cols + col];
     }
 
-    size_t rows() const noexcept
-    {
-        return _rows;
-    }
-    size_t cols() const noexcept
-    {
-        return _cols;
-    }
+    size_t rows() const noexcept { return _rows; }
+    size_t cols() const noexcept { return _cols; }
 };
 
 template <typename T>
-Matrix<T> operator*(const Matrix<T> &lhs, const Matrix<T> &rhs)
+Matrix<T> multiply_omp(const Matrix<T>& lhs, const Matrix<T>& rhs)
 {
     if (lhs.cols() != rhs.rows())
         throw std::invalid_argument("Matrix dimensions do not match for multiplication");
 
-    Matrix<T> result(lhs.rows(), rhs.cols());
-    for (size_t i = 0; i < lhs.rows(); ++i)
+    size_t n = lhs.rows();
+    Matrix<T> result(n, rhs.cols());
+
+#pragma omp parallel for collapse(2)
+    for (size_t i = 0; i < n; ++i)
     {
         for (size_t j = 0; j < rhs.cols(); ++j)
         {
@@ -87,7 +85,7 @@ Matrix<T> operator*(const Matrix<T> &lhs, const Matrix<T> &rhs)
 }
 
 template <typename T>
-std::ostream &operator<<(std::ostream &os, const Matrix<T> &matrix)
+std::ostream& operator<<(std::ostream& os, const Matrix<T>& matrix)
 {
     for (size_t i = 0; i < matrix.rows(); ++i)
     {
