@@ -1,26 +1,25 @@
-# Лабораторная работа №1
-###
+cmake_minimum_required(VERSION 3.20)
+project(lab4_cuda CXX CUDA)
+set(CMAKE_CXX_STANDARD 20)
 
-Описание работы: `matrix.hpp` хранит шаблонный класс матрицы с перегруженными операциями умножения и вывода. `main.cpp` генерирует матрицы заданного размера,
-перемножает их, и выдаёт время работы. Пример вызова: `./lab1 200 400 800 1200 1600 2000`. verify.py позволяет проверить результат умножения с помощью numpy.
+find_package(CUDA REQUIRED)
 
-### Результаты
+if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" OR
+   CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR
+   CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  add_compile_options("-Wall" "-Wconversion" "-Wextra" "-Wpedantic")
+endif()
 
-| Square matrix size: | Computation time: |
-| --- | --- |
-| 200.00 | 0.05 |
-| 400.00 | 0.40 |
-| 800.00 | 10.98 |
-| 1200.00 | 39.75 |
-| 1600.00 | 88.57 |
-|2000.00 | 185.37 |
+# Generator (чистый C++)
+add_executable(generator src/generator.cpp)
+target_include_directories(generator PRIVATE include)
+target_compile_definitions(generator PRIVATE PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
 
-![](result.png)
+# CUDA-версия
+add_executable(lab4 src/main.cpp src/matrix_cuda.cu)
+target_include_directories(lab4 PRIVATE include ${CUDA_INCLUDE_DIRS})
+target_link_libraries(lab4 ${CUDA_LIBRARIES} cudart)
+target_compile_definitions(lab4 PRIVATE PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
 
-### *Характеристики моего ПК*
-| Characteristic | Characteristic value |
-| --- | --- |
-| Processor | 12th Gen Intel(R) Core(TM) i5-12450H |
-| Installed RAM | 16,0 GB |
-| System type | 64-bit operating system, x64-based processor |
-| Graphic card | NVIDIA GeForce RTX 3050 Laptop GPU |
+file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/input")
+file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/output")
