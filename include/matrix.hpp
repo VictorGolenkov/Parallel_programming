@@ -71,9 +71,9 @@ Matrix<T> multiply_omp(const Matrix<T>& lhs, const Matrix<T>& rhs)
     Matrix<T> result(n, rhs.cols());
 
 #pragma omp parallel for collapse(2)
-    for (size_t i = 0; i < n; ++i)
+    for (int i = 0; i < (int)n; ++i)
     {
-        for (size_t j = 0; j < rhs.cols(); ++j)
+        for (int j = 0; j < (int)rhs.cols(); ++j)
         {
             T sum = T();
             for (size_t k = 0; k < lhs.cols(); ++k)

@@ -40,7 +40,6 @@ int main(int argc, char* argv[])
         generate_matrix_file(a_file, size);
         generate_matrix_file(b_file, size);
 
-        std::cout << "Generated " << size << "x" << size << " matrices" << std::endl;
     }
 
     return 0;
