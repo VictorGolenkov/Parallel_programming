@@ -8,123 +8,115 @@
 
 #include "matrix.hpp"
 
-// Объявления CUDA-функций
 extern "C" void launchMatrixMulNaive(const double* d_A, const double* d_B, double* d_C, int N, int blockSize);
-extern "C" void launchMatrixMulTiled(const double* d_A, const double* d_B, double* d_C, int N);
+extern "C" void launchMatrixMulTiled(const double* d_A, const double* d_B, double* d_C, int N, int tileSize);
 
-// Прогрев GPU
 void warmupGPU()
 {
-    double* d_A, * d_B, * d_C;
-    cudaMalloc(&d_A, 128 * 128 * sizeof(double));
-    cudaMalloc(&d_B, 128 * 128 * sizeof(double));
-    cudaMalloc(&d_C, 128 * 128 * sizeof(double));
+	double* d_A, * d_B, * d_C;
+	cudaMalloc(&d_A, 128 * 128 * sizeof(double));
+	cudaMalloc(&d_B, 128 * 128 * sizeof(double));
+	cudaMalloc(&d_C, 128 * 128 * sizeof(double));
 
-    launchMatrixMulNaive(d_A, d_B, d_C, 128, 16);
-    cudaDeviceSynchronize();
+	launchMatrixMulNaive(d_A, d_B, d_C, 128, 16);
+	cudaDeviceSynchronize();
 
-    cudaFree(d_A);
-    cudaFree(d_B);
-    cudaFree(d_C);
+	cudaFree(d_A);
+	cudaFree(d_B);
+	cudaFree(d_C);
 }
 
 int main(int argc, char* argv[])
 {
-    try
-    {
-        if (argc < 2)
-        {
-            std::cerr << "Usage: " << argv[0] << " <size1> [size2] ..." << std::endl;
-            return 1;
-        }
+	try
+	{
+		if (argc < 2)
+		{
+			std::cerr << "Usage: " << argv[0] << " <size1> [size2] ..." << std::endl;
+			return 1;
+		}
 
-        // Проверяем наличие GPU
-        int deviceCount;
-        cudaGetDeviceCount(&deviceCount);
-        if (deviceCount == 0)
-        {
-            std::cerr << "No CUDA-capable GPU found!" << std::endl;
-            return 1;
-        }
+		int deviceCount;
+		cudaGetDeviceCount(&deviceCount);
+		if (deviceCount == 0)
+		{
+			std::cerr << "No CUDA-capable GPU found!" << std::endl;
+			return 1;
+		}
 
-        // Прогрев GPU
-        warmupGPU();
+		warmupGPU();
 
-        // Размеры блоков для перебора
-        std::vector<int> blockSizes = { 8, 16, 32 };
 
-        std::cout << "Size;BlockSize;Algorithm;Time" << std::endl;
+		std::vector<int> blockSizes = { 8, 16, 32 };
 
-        for (int i = 1; i < argc; ++i)
-        {
-            size_t N = std::stoull(argv[i]);
+		std::cout << "Size;BlockSize;Algorithm;Time" << std::endl;
 
-            // Загружаем матрицы
-            Matrix<double> A(std::string(PROJECT_ROOT) + "/input/A.txt");
-            Matrix<double> B(std::string(PROJECT_ROOT) + "/input/B.txt");
+		for (int i = 1; i < argc; ++i)
+		{
+			size_t N = std::stoull(argv[i]);
 
-            // Выделяем память на GPU
-            double* d_A, * d_B, * d_C;
-            cudaMalloc(&d_A, N * N * sizeof(double));
-            cudaMalloc(&d_B, N * N * sizeof(double));
-            cudaMalloc(&d_C, N * N * sizeof(double));
+			Matrix<double> A(std::string(PROJECT_ROOT) + "/input/A.txt");
+			Matrix<double> B(std::string(PROJECT_ROOT) + "/input/B.txt");
 
-            // Копируем данные на GPU
-            cudaMemcpy(d_A, A.data(), N * N * sizeof(double), cudaMemcpyHostToDevice);
-            cudaMemcpy(d_B, B.data(), N * N * sizeof(double), cudaMemcpyHostToDevice);
+			double* d_A, * d_B, * d_C;
+			cudaMalloc(&d_A, N * N * sizeof(double));
+			cudaMalloc(&d_B, N * N * sizeof(double));
+			cudaMalloc(&d_C, N * N * sizeof(double));
 
-            // 1. Наивный алгоритм с разными размерами блока
-            for (int blockSize : blockSizes)
-            {
-                cudaDeviceSynchronize();
-                auto start = std::chrono::high_resolution_clock::now();
+			cudaMemcpy(d_A, A.data(), N * N * sizeof(double), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_B, B.data(), N * N * sizeof(double), cudaMemcpyHostToDevice);
 
-                launchMatrixMulNaive(d_A, d_B, d_C, (int)N, blockSize);
-                cudaDeviceSynchronize();
+			for (int blockSize : blockSizes)
+			{
+				cudaDeviceSynchronize();
+				auto start = std::chrono::high_resolution_clock::now();
 
-                auto end = std::chrono::high_resolution_clock::now();
-                auto duration = std::chrono::duration<double>(end - start);
+				launchMatrixMulNaive(d_A, d_B, d_C, (int)N, blockSize);
+				cudaDeviceSynchronize();
 
-                std::cout << N << ";" << blockSize << "x" << blockSize << ";Naive;"
-                    << duration.count() << std::endl;
-            }
+				auto end = std::chrono::high_resolution_clock::now();
+				auto duration = std::chrono::duration<double>(end - start);
 
-            // 2. Tiling-алгоритм
-            {
-                cudaDeviceSynchronize();
-                auto start = std::chrono::high_resolution_clock::now();
+				std::cout << N << ";" << blockSize << "x" << blockSize << ";Naive;"
+					<< duration.count() << std::endl;
+			}
 
-                launchMatrixMulTiled(d_A, d_B, d_C, (int)N);
-                cudaDeviceSynchronize();
+			for (int tileSize : blockSizes)
+			{
+				cudaDeviceSynchronize();
+				auto start = std::chrono::high_resolution_clock::now();
 
-                auto end = std::chrono::high_resolution_clock::now();
-                auto duration = std::chrono::duration<double>(end - start);
+				launchMatrixMulTiled(d_A, d_B, d_C, (int)N, tileSize);
+				cudaDeviceSynchronize();
 
-                std::cout << N << ";32x32;Tiled;" << duration.count() << std::endl;
+				auto end = std::chrono::high_resolution_clock::now();
+				auto duration = std::chrono::duration<double>(end - start);
 
-                // Сохраняем результат (tiling версия)
-                Matrix<double> C(N, N);
-                cudaMemcpy(C.data(), d_C, N * N * sizeof(double), cudaMemcpyDeviceToHost);
+				std::cout << N << ";" << tileSize << "x" << tileSize << ";Tiled;"
+					<< duration.count() << std::endl;
+			}
 
-                std::string outpath = std::string(PROJECT_ROOT) + "/output/C_cuda.txt";
-                std::ofstream file(outpath.c_str());
-                if (!file.is_open())
-                    throw std::runtime_error("Could not open output file!");
-                file << C.rows() << " " << C.cols() << std::endl;
-                file << C;
-            }
+			Matrix<double> C(N, N);
+			cudaMemcpy(C.data(), d_C, N * N * sizeof(double), cudaMemcpyDeviceToHost);
 
-            // Освобождаем память GPU
-            cudaFree(d_A);
-            cudaFree(d_B);
-            cudaFree(d_C);
-        }
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "Error: " << e.what() << std::endl;
-        return 1;
-    }
+			std::string outpath = std::string(PROJECT_ROOT) + "/output/C.txt";
+			std::ofstream file(outpath.c_str());
+			if (!file.is_open())
+				throw std::runtime_error("Could not open output file!");
+			file << C.rows() << " " << C.cols() << std::endl;
+			file << C;
 
-    return 0;
+
+			cudaFree(d_A);
+			cudaFree(d_B);
+			cudaFree(d_C);
+		}
+	}
+	catch (const std::exception& e)
+	{
+		std::cerr << "Error: " << e.what() << std::endl;
+		return 1;
+	}
+
+	return 0;
 }

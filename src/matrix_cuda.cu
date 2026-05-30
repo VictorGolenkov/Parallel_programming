@@ -1,6 +1,5 @@
 #include <cuda_runtime.h>
 
-// Наивное умножение (только глобальная память)
 __global__ void matrixMulNaive(const double* A, const double* B, double* C, int N)
 {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
@@ -17,41 +16,37 @@ __global__ void matrixMulNaive(const double* A, const double* B, double* C, int 
     }
 }
 
-// Tiling-умножение с shared memory
-#define TILE_SIZE 32
-
-__global__ void matrixMulTiled(const double* A, const double* B, double* C, int N)
+__global__ void matrixMulTiled(const double* A, const double* B, double* C, int N, int tileSize)
 {
-    __shared__ double tileA[TILE_SIZE][TILE_SIZE];
-    __shared__ double tileB[TILE_SIZE][TILE_SIZE];
+    extern __shared__ double sharedMem[];
+    double* tileA = sharedMem;
+    double* tileB = &sharedMem[tileSize * tileSize];
 
-    int row = blockIdx.y * TILE_SIZE + threadIdx.y;
-    int col = blockIdx.x * TILE_SIZE + threadIdx.x;
+    int row = blockIdx.y * tileSize + threadIdx.y;
+    int col = blockIdx.x * tileSize + threadIdx.x;
 
     double sum = 0.0;
 
-    for (int t = 0; t < (N + TILE_SIZE - 1) / TILE_SIZE; ++t)
+    for (int t = 0; t < (N + tileSize - 1) / tileSize; ++t)
     {
-        // Загрузка тайлов в shared memory
-        int tiledRow = t * TILE_SIZE + threadIdx.y;
-        int tiledCol = t * TILE_SIZE + threadIdx.x;
+        int tiledRow = t * tileSize + threadIdx.y;
+        int tiledCol = t * tileSize + threadIdx.x;
 
         if (row < N && tiledCol < N)
-            tileA[threadIdx.y][threadIdx.x] = A[row * N + tiledCol];
+            tileA[threadIdx.y * tileSize + threadIdx.x] = A[row * N + tiledCol];
         else
-            tileA[threadIdx.y][threadIdx.x] = 0.0;
+            tileA[threadIdx.y * tileSize + threadIdx.x] = 0.0;
 
         if (tiledRow < N && col < N)
-            tileB[threadIdx.y][threadIdx.x] = B[tiledRow * N + col];
+            tileB[threadIdx.y * tileSize + threadIdx.x] = B[tiledRow * N + col];
         else
-            tileB[threadIdx.y][threadIdx.x] = 0.0;
+            tileB[threadIdx.y * tileSize + threadIdx.x] = 0.0;
 
         __syncthreads();
 
-        // Умножение тайлов
-        for (int k = 0; k < TILE_SIZE; ++k)
+        for (int k = 0; k < tileSize; ++k)
         {
-            sum += tileA[threadIdx.y][k] * tileB[k][threadIdx.x];
+            sum += tileA[threadIdx.y * tileSize + k] * tileB[k * tileSize + threadIdx.x];
         }
 
         __syncthreads();
@@ -63,7 +58,6 @@ __global__ void matrixMulTiled(const double* A, const double* B, double* C, int 
     }
 }
 
-// Интерфейсная функция для вызова из C++
 extern "C" void launchMatrixMulNaive(const double* d_A, const double* d_B, double* d_C, int N, int blockSize)
 {
     dim3 blockDim(blockSize, blockSize);
@@ -72,10 +66,12 @@ extern "C" void launchMatrixMulNaive(const double* d_A, const double* d_B, doubl
     matrixMulNaive<<<gridDim, blockDim>>>(d_A, d_B, d_C, N);
 }
 
-extern "C" void launchMatrixMulTiled(const double* d_A, const double* d_B, double* d_C, int N)
+extern "C" void launchMatrixMulTiled(const double* d_A, const double* d_B, double* d_C, int N, int tileSize)
 {
-    dim3 blockDim(TILE_SIZE, TILE_SIZE);
-    dim3 gridDim((N + TILE_SIZE - 1) / TILE_SIZE, (N + TILE_SIZE - 1) / TILE_SIZE);
-    
-    matrixMulTiled<<<gridDim, blockDim>>>(d_A, d_B, d_C, N);
+    dim3 blockDim(tileSize, tileSize);
+    dim3 gridDim((N + tileSize - 1) / tileSize, (N + tileSize - 1) / tileSize);
+
+    size_t sharedMemSize = 2 * tileSize * tileSize * sizeof(double);
+
+    matrixMulTiled<<<gridDim, blockDim, sharedMemSize>>>(d_A, d_B, d_C, N, tileSize);
 }
